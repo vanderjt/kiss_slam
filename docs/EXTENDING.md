@@ -96,3 +96,14 @@ slam = EKFSLAM(
 - Verify Jacobians with finite-difference checks before large runs.
 - Add focused unit tests in `tests/` for each new model/associator.
 - Start with known correspondences before attempting unknown association.
+
+## Linting and formatting recommendations
+
+For local code hygiene, run lint and formatting checks before committing:
+
+```bash
+ruff check src tests examples
+black src tests examples
+```
+
+These checks are currently advisory, but strongly recommended to keep contributions readable and consistent.

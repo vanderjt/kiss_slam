@@ -42,7 +42,6 @@ with measurement covariance :math:`R` and wrapped bearing innovations.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
 import numpy as np
 
 from kiss_slam.data_association import KnownCorrespondenceAssociator
@@ -60,6 +59,12 @@ class EKFSLAM:
     Q: np.ndarray | None = None
     R: np.ndarray | None = None
     config: EKFSLAMConfig = field(default_factory=EKFSLAMConfig)
+
+    _mu: np.ndarray = field(init=False, repr=False)
+    _sigma: np.ndarray = field(init=False, repr=False)
+    _landmark_index: dict[int, int] = field(init=False, repr=False)
+    _nis_values: list[float] = field(init=False, repr=False)
+    _last_innovation_vectors: list[tuple[np.ndarray, np.ndarray]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.Q = self.config.process_noise if self.Q is None else np.asarray(self.Q, dtype=float)

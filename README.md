@@ -53,6 +53,26 @@ Run the end-to-end simulator demo:
 python examples/ekf_slam_demo.py
 ```
 
+
+## Testing
+
+Run the full test suite from the repository root:
+
+```bash
+python -m pytest
+```
+
+## Linting and formatting guidance
+
+Linting and formatting are intentionally lightweight but recommended before opening a PR:
+
+```bash
+ruff check src tests examples
+black src tests examples
+```
+
+These tools are guidance-only in this repository today (not CI-enforced), but keeping code clean and consistently formatted helps preserve the KISS design goal.
+
 ## API overview
 
 Core classes for integration:
