@@ -1,4 +1,43 @@
-"""Baseline EKF-SLAM implementation for 2D landmark mapping."""
+r"""Extended Kalman Filter SLAM for 2D landmark mapping.
+
+State layout
+------------
+The joint Gaussian state is organized as:
+
+.. math::
+   \mu = [x, y, \theta, l_{1x}, l_{1y}, \ldots]^T
+
+with covariance :math:`\Sigma` of matching shape.
+
+Prediction model
+----------------
+We use a unicycle control model with control input
+:math:`u=[v,\omega]` and timestep ``dt``:
+
+.. math::
+   x' = x + v\,dt\cos\theta,
+   \quad y' = y + v\,dt\sin\theta,
+   \quad \theta' = \theta + \omega dt
+
+The EKF prediction applies Jacobians :math:`F_x = \partial f/\partial x` and
+:math:`F_u = \partial f/\partial u` with control noise :math:`Q_u`.
+
+Update model
+------------
+For each landmark :math:`l_i=[l_x,l_y]`, expected measurement is:
+
+.. math::
+   h(x,l_i)=\begin{bmatrix}
+     r\\
+     \phi
+   \end{bmatrix}
+   =\begin{bmatrix}
+     \sqrt{(l_x-x)^2+(l_y-y)^2}\\
+     \operatorname{atan2}(l_y-y,l_x-x)-\theta
+   \end{bmatrix}
+
+with measurement covariance :math:`R` and wrapped bearing innovations.
+"""
 
 from __future__ import annotations
 
@@ -7,97 +46,148 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from kiss_slam.data_association import KnownCorrespondenceAssociator
-from kiss_slam.math_utils import wrap_angle
-from kiss_slam.types import ControlInput, Measurement, Pose2D
+from kiss_slam.math_utils import mahalanobis_distance, wrap_angle
+from kiss_slam.types import ControlInput, EKFSLAMConfig, Measurement, Pose2D
 
 
 @dataclass(slots=True)
 class EKFSLAM:
-    """EKF-SLAM estimator with explicit state layout.
-
-    Joint state vector is:
-    `[x, y, yaw, l0x, l0y, l1x, l1y, ...]`.
-    """
+    """2D landmark-based EKF-SLAM estimator."""
 
     motion_model: object
     measurement_model: object
-    associator: object = field(default_factory=KnownCorrespondenceAssociator)
-    initial_pose_cov: np.ndarray = field(default_factory=lambda: np.diag([1e-3, 1e-3, 1e-3]))
-    initial_landmark_cov: np.ndarray = field(default_factory=lambda: np.diag([10.0, 10.0]))
+    assoc: object = field(default_factory=KnownCorrespondenceAssociator)
+    Q: np.ndarray | None = None
+    R: np.ndarray | None = None
+    config: EKFSLAMConfig = field(default_factory=EKFSLAMConfig)
 
     def __post_init__(self) -> None:
-        self._mu = np.zeros(3, dtype=float)
-        self._sigma = self.initial_pose_cov.astype(float).copy()
+        self.Q = self.config.process_noise if self.Q is None else np.asarray(self.Q, dtype=float)
+        self.R = self.config.measurement_noise if self.R is None else np.asarray(self.R, dtype=float)
+
+        self._mu = self.config.initial_pose.as_array().astype(float)
+        self._sigma = self.config.initial_pose_cov.astype(float).copy()
         self._landmark_index: dict[int, int] = {}
+
         self._nis_values: list[float] = []
 
-    @property
-    def state(self) -> np.ndarray:
-        """Current joint mean vector."""
-        return self._mu
+    def predict(self, u: ControlInput, dt: float, control_cov: np.ndarray | None = None) -> None:
+        """Run EKF prediction.
 
-    @property
-    def covariance(self) -> np.ndarray:
-        """Current joint covariance matrix."""
-        return self._sigma
+        Parameters
+        ----------
+        u:
+            Unicycle control input ``[v, w]``.
+        dt:
+            Integration interval in seconds.
+        control_cov:
+            Optional override for control noise covariance ``Q_u``.
+        """
+        q_u = self.Q if control_cov is None else np.asarray(control_cov, dtype=float)
 
-    @property
-    def nis_values(self) -> list[float]:
-        """Collected normalized innovation squared values."""
-        return self._nis_values
-
-    def set_initial_pose(self, pose: Pose2D) -> None:
-        """Set initial robot mean pose."""
-        self._mu[:3] = pose.as_array()
-
-    def predict(self, control: ControlInput, control_cov: np.ndarray, dt: float) -> None:
-        """EKF predict step for robot pose and joint covariance."""
-        robot = self._mu[:3]
-        robot_next = self.motion_model.predict_state(robot, control, dt)
-        fx, fu = self.motion_model.jacobians(robot, control, dt)
+        robot_state = self._mu[:3]
+        robot_pred = self.motion_model.predict_state(robot_state, u, dt)
+        fx, fu = self.motion_model.jacobians(robot_state, u, dt)
 
         n = self._mu.size
         g = np.eye(n, dtype=float)
         g[:3, :3] = fx
-        r = fu @ control_cov @ fu.T
 
-        self._mu[:3] = robot_next
+        self._mu[:3] = robot_pred
         self._mu[2] = wrap_angle(self._mu[2])
+
         self._sigma = g @ self._sigma @ g.T
-        self._sigma[:3, :3] += r
+        self._sigma[:3, :3] += fu @ q_u @ fu.T
 
-    def update(self, measurements: list[Measurement], measurement_cov: np.ndarray) -> None:
-        """EKF measurement updates with association and on-the-fly landmark creation."""
-        known_ids = set(self._landmark_index.keys())
-        associated = self.associator.associate(measurements=measurements, known_landmark_ids=known_ids)
-        for item in associated:
-            landmark_id = item.landmark_id
+    def update(self, measurements: list[Measurement], measurement_cov: np.ndarray | None = None) -> None:
+        """Run EKF correction for all measurements in sequence."""
+        if not measurements:
+            return
+
+        r = self.R if measurement_cov is None else np.asarray(measurement_cov, dtype=float)
+
+        associations = self._associate(measurements, r)
+        for item in associations:
             measurement = item.measurement
+            landmark_id = item.landmark_id
 
-            if landmark_id is None and measurement.landmark_id is not None:
-                landmark_id = measurement.landmark_id
             if landmark_id is None:
-                # TODO: support anonymous landmark hypotheses.
                 continue
 
             if landmark_id not in self._landmark_index:
-                self._add_landmark(landmark_id, measurement)
+                self._initialize_landmark(landmark_id=landmark_id, measurement=measurement, measurement_cov=r)
                 continue
 
-            self._update_existing_landmark(landmark_id, measurement, measurement_cov)
+            self._update_landmark(landmark_id=landmark_id, measurement=measurement, measurement_cov=r)
+
+    def step(self, u: ControlInput, dt: float, measurements: list[Measurement]) -> None:
+        """Convenience wrapper for one predict-update cycle."""
+        self.predict(u=u, dt=dt)
+        self.update(measurements=measurements)
+
+    def get_state(self) -> tuple[Pose2D, dict[int, np.ndarray]]:
+        """Return robot pose and dictionary of landmark states."""
+        pose = Pose2D(float(self._mu[0]), float(self._mu[1]), float(self._mu[2]))
+        return pose, self.landmark_states()
+
+    def get_covariance(self) -> np.ndarray:
+        """Return current joint covariance matrix."""
+        return self._sigma.copy()
+
+    @property
+    def state(self) -> np.ndarray:
+        return self._mu
+
+    @property
+    def covariance(self) -> np.ndarray:
+        return self._sigma
+
+    @property
+    def nis_values(self) -> list[float]:
+        return self._nis_values
 
     def robot_pose(self) -> np.ndarray:
-        """Return robot state `[x, y, yaw]`."""
+        """Return estimated robot pose as array."""
         return self._mu[:3].copy()
 
     def landmark_states(self) -> dict[int, np.ndarray]:
-        """Return map of landmark id to `[x, y]` state estimate."""
-        states: dict[int, np.ndarray] = {}
-        for landmark_id, start in self._landmark_index.items():
-            states[landmark_id] = self._mu[start : start + 2].copy()
-        return states
+        """Return map from landmark ID to landmark ``[x,y]`` estimate."""
+        return {lid: self._mu[start : start + 2].copy() for lid, start in self._landmark_index.items()}
 
-    def _add_landmark(self, landmark_id: int, measurement: Measurement) -> None:
+    def landmark_covariance(self, landmark_id: int) -> np.ndarray:
+        """Return 2x2 covariance for one landmark."""
+        start = self._landmark_index[landmark_id]
+        return self._sigma[start : start + 2, start : start + 2].copy()
+
+    def _associate(self, measurements: list[Measurement], measurement_cov: np.ndarray) -> list:
+        known_ids = set(self._landmark_index)
+
+        if hasattr(self.assoc, "associate"):
+            kwargs = {
+                "measurements": measurements,
+                "known_landmark_ids": known_ids,
+                "robot_state": self._mu[:3],
+                "landmark_states": self.landmark_states(),
+                "innovation_cov_fn": lambda landmark_id: self._innovation_covariance(landmark_id, measurement_cov),
+                "measurement_model": self.measurement_model,
+                "measurement_cov": measurement_cov,
+            }
+            return self.assoc.associate(**kwargs)
+        raise TypeError("Associator must provide an associate(...) method")
+
+    def _innovation_covariance(self, landmark_id: int, measurement_cov: np.ndarray) -> np.ndarray:
+        start = self._landmark_index[landmark_id]
+        robot_state = self._mu[:3]
+        landmark_state = self._mu[start : start + 2]
+
+        hr, hl = self.measurement_model.jacobians(robot_state, landmark_state)
+        n = self._mu.size
+        h = np.zeros((2, n), dtype=float)
+        h[:, :3] = hr
+        h[:, start : start + 2] = hl
+        return h @ self._sigma @ h.T + measurement_cov
+
+    def _initialize_landmark(self, landmark_id: int, measurement: Measurement, measurement_cov: np.ndarray) -> None:
         landmark_xy = self.measurement_model.initialize_landmark(self._mu[:3], measurement)
         old_n = self._mu.size
 
@@ -107,23 +197,35 @@ class EKFSLAM:
 
         sigma_new = np.zeros((old_n + 2, old_n + 2), dtype=float)
         sigma_new[:old_n, :old_n] = self._sigma
-        sigma_new[old_n:, old_n:] = self.initial_landmark_cov
+
+        # Landmark initialization covariance via first-order linearization.
+        gx, gz = self.measurement_model.initialization_jacobians(self._mu[:3], measurement)
+        sigma_xr = self._sigma[:, :3]  # cross-covariance between full state and robot state.
+        sigma_xl = sigma_xr @ gx.T
+        sigma_ll = gx @ self._sigma[:3, :3] @ gx.T + gz @ measurement_cov @ gz.T
+
+        sigma_new[:old_n, old_n:] = sigma_xl
+        sigma_new[old_n:, :old_n] = sigma_xl.T
+        sigma_new[old_n:, old_n:] = sigma_ll
+
+        if not np.all(np.isfinite(sigma_new[old_n:, old_n:])):
+            sigma_new[old_n:, old_n:] = self.config.initial_landmark_cov
 
         self._mu = mu_new
         self._sigma = sigma_new
         self._landmark_index[landmark_id] = old_n
 
-    def _update_existing_landmark(self, landmark_id: int, measurement: Measurement, measurement_cov: np.ndarray) -> None:
+    def _update_landmark(self, landmark_id: int, measurement: Measurement, measurement_cov: np.ndarray) -> None:
         start = self._landmark_index[landmark_id]
-        robot = self._mu[:3]
-        landmark = self._mu[start : start + 2]
+        robot_state = self._mu[:3]
+        landmark_state = self._mu[start : start + 2]
 
         z = measurement.as_array()
-        z_hat = self.measurement_model.predict(robot, landmark)
+        z_hat = self.measurement_model.predict(robot_state, landmark_state)
         innovation = z - z_hat
         innovation[1] = wrap_angle(innovation[1])
 
-        hr, hl = self.measurement_model.jacobians(robot, landmark)
+        hr, hl = self.measurement_model.jacobians(robot_state, landmark_state)
         n = self._mu.size
         h = np.zeros((2, n), dtype=float)
         h[:, :3] = hr
@@ -134,8 +236,12 @@ class EKFSLAM:
 
         self._mu = self._mu + k @ innovation
         self._mu[2] = wrap_angle(self._mu[2])
-        identity = np.eye(n, dtype=float)
-        self._sigma = (identity - k @ h) @ self._sigma
 
-        nis = float(innovation.T @ np.linalg.inv(s) @ innovation)
-        self._nis_values.append(nis)
+        i_n = np.eye(n, dtype=float)
+        if self.config.use_joseph_form:
+            residual = i_n - k @ h
+            self._sigma = residual @ self._sigma @ residual.T + k @ measurement_cov @ k.T
+        else:
+            self._sigma = (i_n - k @ h) @ self._sigma
+
+        self._nis_values.append(mahalanobis_distance(innovation, s))
