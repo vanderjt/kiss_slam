@@ -28,10 +28,10 @@ def main() -> None:
     est_traj: list[np.ndarray] = []
     true_landmarks = np.array([[landmark.x, landmark.y] for landmark in world.landmarks], dtype=float)
 
-    for step in sim.run():
-        slam.step(u=step.control, dt=sim.config.dt, measurements=step.measurements)
+    for control, dt, measurements, true_pose in sim.run():
+        slam.step(u=control, dt=dt, measurements=measurements)
 
-        true_traj.append(step.true_pose.as_array())
+        true_traj.append(true_pose.as_array())
         est_traj.append(slam.robot_pose())
         est_landmarks = np.array(list(slam.landmark_states().values()), dtype=float)
 
