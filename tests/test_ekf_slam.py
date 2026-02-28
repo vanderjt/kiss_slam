@@ -11,14 +11,15 @@ def test_ekf_adds_new_landmark() -> None:
         motion_model=DifferentialDriveMotionModel(),
         measurement_model=RangeBearingMeasurementModel(),
     )
-    slam.predict(control=ControlInput(v=0.0, w=0.0), control_cov=np.diag([1e-3, 1e-3]), dt=0.1)
+    slam.predict(u=ControlInput(v=0.0, w=0.0), dt=0.1, control_cov=np.diag([1e-3, 1e-3]))
     slam.update(
         measurements=[Measurement(landmark_id=7, range_m=5.0, bearing_rad=0.0)],
         measurement_cov=np.diag([0.1, 0.1]),
     )
-    landmarks = slam.landmark_states()
+    _, landmarks = slam.get_state()
     assert 7 in landmarks
     assert slam.state.shape[0] == 5
+    assert slam.get_covariance().shape == (5, 5)
 
 
 def test_ekf_update_records_nis_for_known_landmark() -> None:
@@ -29,7 +30,7 @@ def test_ekf_update_records_nis_for_known_landmark() -> None:
     cov_u = np.diag([1e-3, 1e-3])
     cov_z = np.diag([0.1, 0.1])
 
-    slam.predict(control=ControlInput(v=0.0, w=0.0), control_cov=cov_u, dt=0.1)
+    slam.predict(u=ControlInput(v=0.0, w=0.0), dt=0.1, control_cov=cov_u)
     slam.update([Measurement(landmark_id=1, range_m=2.0, bearing_rad=0.0)], measurement_cov=cov_z)
     slam.update([Measurement(landmark_id=1, range_m=2.1, bearing_rad=0.05)], measurement_cov=cov_z)
 
