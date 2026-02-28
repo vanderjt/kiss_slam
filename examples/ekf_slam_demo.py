@@ -2,6 +2,7 @@ r"""Run an end-to-end EKF-SLAM demo with simulation and live visualization."""
 
 from __future__ import annotations
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from kiss_slam.ekf_slam import EKFSLAM
@@ -23,32 +24,61 @@ def main() -> None:
         config=EKFSLAMConfig(process_noise=sim.control_cov, measurement_noise=sim.measurement_cov),
     )
 
-    viewer = LiveViewer(show_covariance=True)
+    viewer = LiveViewer(show_ground_truth=True, show_covariance=True, show_innovations=True)
+    paused = False
+
+    def on_key_press(event: plt.KeyEvent) -> None:
+        nonlocal paused
+        if event.key == "g":
+            viewer.show_ground_truth = not viewer.show_ground_truth
+            print(f"Ground truth: {'ON' if viewer.show_ground_truth else 'OFF'}")
+        elif event.key == "c":
+            viewer.show_covariance = not viewer.show_covariance
+            print(f"Covariances: {'ON' if viewer.show_covariance else 'OFF'}")
+        elif event.key == "i":
+            viewer.show_innovations = not viewer.show_innovations
+            print(f"Innovations: {'ON' if viewer.show_innovations else 'OFF'}")
+        elif event.key == " ":
+            paused = not paused
+            print(f"Simulation: {'PAUSED' if paused else 'RUNNING'}")
+
+    viewer.fig.canvas.mpl_connect("key_press_event", on_key_press)
+
     true_traj: list[np.ndarray] = []
     est_traj: list[np.ndarray] = []
     true_landmarks = np.array([[landmark.x, landmark.y] for landmark in world.landmarks], dtype=float)
 
     for control, dt, measurements, true_pose in sim.run():
+        while paused and plt.fignum_exists(viewer.fig.number):
+            plt.pause(0.05)
+
         slam.step(u=control, dt=dt, measurements=measurements)
 
         true_traj.append(true_pose.as_array())
-        est_traj.append(slam.robot_pose())
-        est_landmarks = np.array(list(slam.landmark_states().values()), dtype=float)
+        est_pose = slam.robot_pose()
+        est_traj.append(est_pose)
+
+        est_landmarks = slam.landmark_states()
+        landmark_covariances = {landmark_id: slam.landmark_covariance(landmark_id) for landmark_id in est_landmarks}
 
         viewer.update(
             true_traj=np.array(true_traj),
             est_traj=np.array(est_traj),
+            current_pose=est_pose,
             true_landmarks=true_landmarks,
-            est_landmarks=est_landmarks if est_landmarks.size else np.empty((0, 2)),
+            est_landmarks=est_landmarks,
             state_cov=slam.get_covariance(),
+            landmark_covariances=landmark_covariances,
+            innovation_vectors=slam.innovation_vectors(),
         )
+
+        if not plt.fignum_exists(viewer.fig.number):
+            break
 
     if slam.nis_values:
         print(f"Mean NIS: {np.mean(slam.nis_values):.3f}")
 
     print("Demo complete. Close the plot window to exit.")
-    import matplotlib.pyplot as plt
-
     plt.show()
 
 
