@@ -1,23 +1,15 @@
 # kiss_slam
 
-`kiss_slam` is a small, readable, and extensible Python package for 2D landmark-based SLAM.
-It provides:
-
-- A baseline EKF-SLAM implementation.
-- Swappable motion and measurement models.
-- Data-association helpers (known correspondences + nearest-neighbor stub).
-- A lightweight simulator that generates trajectory, odometry, and range-bearing measurements.
-- A Matplotlib live viewer for trajectories, landmarks, and covariance ellipses.
+`kiss_slam` is a small, readable Python package for 2D landmark EKF-SLAM.
+It is designed for fast integration into non-ROS robotics projects (Python 3.10+).
 
 ## Install
-
-### Editable install (recommended for development)
 
 ```bash
 pip install -e .
 ```
 
-### Install with dev dependencies
+Development install (tests, lint tooling):
 
 ```bash
 pip install -e .[dev]
@@ -26,52 +18,101 @@ pip install -e .[dev]
 ## Quickstart
 
 ```python
-from kiss_slam.sim.world import World2D
-from kiss_slam.sim.simulator import SimulatorConfig, Simulator2D
+import numpy as np
+
+from kiss_slam import EKFSLAM, EKFSLAMConfig
 from kiss_slam.models.motion import DifferentialDriveMotionModel
 from kiss_slam.models.measurement import RangeBearingMeasurementModel
-from kiss_slam.ekf_slam import EKFSLAM
+from kiss_slam.types import ControlInput, Measurement
 
-world = World2D.random(seed=0, n_landmarks=10, xlim=(-20, 20), ylim=(-20, 20))
-sim = Simulator2D(
-    world=world,
-    config=SimulatorConfig(dt=0.1, steps=50, sensor_range=15.0),
+slam = EKFSLAM(
+    motion_model=DifferentialDriveMotionModel(),
+    measurement_model=RangeBearingMeasurementModel(),
+    config=EKFSLAMConfig(
+        process_noise=np.diag([0.05**2, 0.03**2]),
+        measurement_noise=np.diag([0.20**2, np.deg2rad(3.0) ** 2]),
+    ),
 )
-motion = DifferentialDriveMotionModel()
-measurement = RangeBearingMeasurementModel()
-slam = EKFSLAM(motion_model=motion, measurement_model=measurement)
 
-for step in sim.run():
-    slam.predict(control=step.control, control_cov=sim.control_cov, dt=sim.config.dt)
-    slam.update(measurements=step.measurements, measurement_cov=sim.measurement_cov)
+u = ControlInput(v=1.0, w=0.1)
+slam.predict(u=u, dt=0.1)
+slam.update(
+    measurements=[
+        Measurement(landmark_id=1, range_m=4.2, bearing_rad=0.3),
+        Measurement(landmark_id=2, range_m=6.5, bearing_rad=-0.2),
+    ]
+)
+
+pose_est, landmarks_est = slam.get_state()
+print(pose_est, len(landmarks_est))
 ```
 
-## Run the demo
+Run the end-to-end simulator demo:
 
 ```bash
 python examples/ekf_slam_demo.py
 ```
 
-The demo creates a random world, simulates a robot run, executes EKF-SLAM,
-and displays a live plot with true/estimated pose, trajectories, landmarks, and covariance ellipses.
+## API overview
 
-## Testing
+Core classes for integration:
 
-```bash
-pytest
-```
+- `EKFSLAM`: estimator with `predict(...)`, `update(...)`, `step(...)`.
+- `EKFSLAMConfig`: process/measurement noise, initial covariance, gating/Joseph options.
+- `ControlInput(v, w)`: odometry input (m/s, rad/s).
+- `Measurement(landmark_id, range_m, bearing_rad)`: range-bearing observation.
+- `DifferentialDriveMotionModel`: unicycle-style motion model.
+- `RangeBearingMeasurementModel`: expected measurement + Jacobians + landmark init.
+- `KnownCorrespondenceAssociator`: baseline known-ID data association.
+- `NearestNeighborAssociator`: gated Mahalanobis nearest-neighbor association.
 
-## Project layout
+Typical call sequence:
 
-- `src/kiss_slam/`: library package code.
-- `examples/`: runnable demos.
-- `docs/`: architecture and design notes.
-- `tests/`: unit tests with `pytest`.
+1. `predict(u, dt, control_cov=...)`
+2. `update(measurements, measurement_cov=...)`
+3. read estimate with `get_state()` / `get_covariance()`.
 
-## Design notes
+## Tuning tips (Q/R and gating)
 
-The package follows the KISS principle:
+- Start conservative: larger `Q` and `R` reduce overconfidence and divergence.
+- `Q` (`process_noise`) should reflect real odometry drift, wheel slip, and timing jitter.
+- `R` (`measurement_noise`) should reflect range and bearing noise after outlier filtering.
+- If innovations are large but consistent, increase `Q` first (odometry often dominates).
+- If map updates are jittery, increase `R`.
+- For nearest-neighbor data association, tune `gate_threshold`:
+  - Lower gate: safer but more missed associations/new landmarks.
+  - Higher gate: fewer misses but more false matches.
+- Keep angle units in radians everywhere (`bearing_rad`, yaw, `w`).
 
-- Small classes with single responsibilities.
-- Clear, explicit type hints and docstrings.
-- Extension points documented in `docs/ARCHITECTURE.md`.
+## Troubleshooting
+
+### Filter divergence (state/covariance blow-up)
+
+- Increase `Q` and/or `R`; under-modeled noise is the most common cause.
+- Verify `dt` and control units match the motion model assumptions.
+- Ensure outlier measurements are removed before calling `update(...)`.
+- Keep Joseph form enabled (`use_joseph_form=True`) for numerical stability.
+
+### Angle wrap issues
+
+Symptoms: sudden heading jumps near ±π, inconsistent bearing innovations.
+
+- Normalize all angles to `[-pi, pi]` before passing to SLAM.
+- Do not subtract raw angles directly without wrapping.
+- Ensure sensor code outputs bearing relative to robot heading.
+
+### Poor landmark association
+
+Symptoms: duplicated landmarks, map corruption, unstable corrections.
+
+- With known IDs, ensure IDs are stable over time and unique.
+- With nearest-neighbor, tighten `gate_threshold` and improve `R` realism.
+- Drop low-quality observations (grazing angles, too far, partial occlusion).
+- Prefer initializing landmarks only from geometrically reliable views.
+
+## More docs
+
+- Robot integration guide: `docs/USAGE_IN_ROBOT.md`
+- Tuning guide: `docs/CONFIG_TUNING.md`
+- Extension guide: `docs/EXTENDING.md`
+- Architecture notes: `docs/ARCHITECTURE.md`
