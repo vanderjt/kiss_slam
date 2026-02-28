@@ -70,6 +70,7 @@ class EKFSLAM:
         self._landmark_index: dict[int, int] = {}
 
         self._nis_values: list[float] = []
+        self._last_innovation_vectors: list[tuple[np.ndarray, np.ndarray]] = []
 
     def predict(self, u: ControlInput, dt: float, control_cov: np.ndarray | None = None) -> None:
         """Run EKF prediction.
@@ -101,6 +102,7 @@ class EKFSLAM:
 
     def update(self, measurements: list[Measurement], measurement_cov: np.ndarray | None = None) -> None:
         """Run EKF correction for all measurements in sequence."""
+        self._last_innovation_vectors = []
         if not measurements:
             return
 
@@ -149,6 +151,10 @@ class EKFSLAM:
     def robot_pose(self) -> np.ndarray:
         """Return estimated robot pose as array."""
         return self._mu[:3].copy()
+
+    def innovation_vectors(self) -> list[tuple[np.ndarray, np.ndarray]]:
+        """Return list of innovation vectors represented as ``(start_xy, end_xy)``."""
+        return [(start.copy(), end.copy()) for start, end in self._last_innovation_vectors]
 
     def landmark_states(self) -> dict[int, np.ndarray]:
         """Return map from landmark ID to landmark ``[x,y]`` estimate."""
@@ -224,6 +230,7 @@ class EKFSLAM:
         z_hat = self.measurement_model.predict(robot_state, landmark_state)
         innovation = z - z_hat
         innovation[1] = wrap_angle(innovation[1])
+        self._last_innovation_vectors.append(self._innovation_segment(robot_state, z_hat, z))
 
         hr, hl = self.measurement_model.jacobians(robot_state, landmark_state)
         n = self._mu.size
@@ -245,3 +252,16 @@ class EKFSLAM:
             self._sigma = (i_n - k @ h) @ self._sigma
 
         self._nis_values.append(mahalanobis_distance(innovation, s))
+
+    @staticmethod
+    def _innovation_segment(robot_state: np.ndarray, predicted_z: np.ndarray, measured_z: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Map a measurement innovation to world-frame segment endpoints."""
+        theta = float(robot_state[2])
+
+        pred_angle = theta + float(predicted_z[1])
+        meas_angle = theta + float(measured_z[1])
+        robot_xy = robot_state[:2]
+
+        start = robot_xy + np.array([predicted_z[0] * np.cos(pred_angle), predicted_z[0] * np.sin(pred_angle)], dtype=float)
+        end = robot_xy + np.array([measured_z[0] * np.cos(meas_angle), measured_z[0] * np.sin(meas_angle)], dtype=float)
+        return start, end

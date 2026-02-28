@@ -36,6 +36,22 @@ def numerical_jacobian(func, x: np.ndarray, eps: float = 1e-6) -> np.ndarray:
 
 def covariance_ellipse(mean_xy: np.ndarray, covariance_xy: np.ndarray, n_std: float = 2.0, **kwargs) -> Ellipse:
     """Create a Matplotlib ellipse patch for a 2D covariance matrix."""
+    center_xy, width, height, angle_deg = covariance_ellipse_params(mean_xy, covariance_xy, n_std=n_std)
+    return Ellipse(xy=center_xy, width=width, height=height, angle=angle_deg, fill=False, **kwargs)
+
+
+def covariance_ellipse_params(
+    mean_xy: np.ndarray,
+    covariance_xy: np.ndarray,
+    n_std: float = 2.0,
+) -> tuple[np.ndarray, float, float, float]:
+    """Return covariance ellipse geometry for efficient artist updates.
+
+    Returns
+    -------
+    tuple[np.ndarray, float, float, float]
+        ``(center_xy, width, height, angle_deg)`` for Matplotlib-style ellipses.
+    """
     eigenvalues, eigenvectors = np.linalg.eigh(covariance_xy)
     order = np.argsort(eigenvalues)[::-1]
     eigenvalues = eigenvalues[order]
@@ -43,4 +59,4 @@ def covariance_ellipse(mean_xy: np.ndarray, covariance_xy: np.ndarray, n_std: fl
 
     width, height = 2.0 * n_std * np.sqrt(np.maximum(eigenvalues, 0.0))
     angle_deg = np.degrees(np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0]))
-    return Ellipse(xy=mean_xy, width=width, height=height, angle=angle_deg, fill=False, **kwargs)
+    return np.asarray(mean_xy, dtype=float), float(width), float(height), float(angle_deg)
