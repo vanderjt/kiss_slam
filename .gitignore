@@ -1,0 +1,11 @@
+# Minimal Python .gitignore
+__pycache__/
+*.py[cod]
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Environment files
+.env

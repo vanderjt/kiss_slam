@@ -1,0 +1,27 @@
+# KISS SLAM
+
+Simple, lightweight SLAM (Simultaneous Localization and Mapping) utilities and examples focused on clarity and ease of use.
+
+## Description
+This repository contains minimal, well-documented code and data to experiment with basic SLAM ideas and pipelines. Designed for learning and rapid prototyping.
+
+## Features
+
+## Requirements
+
+## Installation
+1. Clone the repository:
+
+## Usage
+- Inspect the `examples/` folder for runnable demos.
+- Run a simple example:
+
+
+## Contributing
+Contributions are welcome. Please open issues for bugs or feature requests and submit PRs with clear descriptions and tests when appropriate.
+
+## License
+MIT License — see LICENSE file.
+
+## Author
+Juno Vanderlyn
