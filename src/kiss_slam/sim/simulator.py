@@ -79,6 +79,12 @@ class Simulator:
     seed: int | None = None
     initial_pose: Pose2D = field(default_factory=lambda: Pose2D(0.0, 0.0, 0.0))
 
+    _rng: np.random.Generator = field(init=False, repr=False)
+    _step_count: int = field(init=False, repr=False)
+    _time_s: float = field(init=False, repr=False)
+    _true_pose: Pose2D = field(init=False, repr=False)
+    _smooth_control_state: np.ndarray = field(init=False, repr=False)
+
     def __post_init__(self) -> None:
         self._rng = np.random.default_rng(self.seed)
         self._step_count = 0
