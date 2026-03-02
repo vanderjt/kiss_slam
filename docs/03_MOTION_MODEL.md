@@ -16,13 +16,16 @@
 Motion prediction is dead-reckoning: “given last pose + control, where should robot be now?”
 The EKF also needs Jacobians to propagate uncertainty.
 
+## Relevant runnable example
+- `examples/03_motion_model_only.py`
+
 ## Where to look
 - Prediction equations: `src/kiss_slam/models/motion.py`
 - How EKF uses `Fx`/`Fu`: `src/kiss_slam/ekf_slam.py`
 
 ## Run example
 ```bash
-python examples/tutorial_03_motion_model.py
+python examples/03_motion_model_only.py
 ```
 
 ## Try this

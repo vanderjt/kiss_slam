@@ -16,13 +16,16 @@
 The sensor predicts how a landmark should look from robot pose: range + bearing.
 Update step compares predicted measurement against actual measurement.
 
+## Relevant runnable example
+- `examples/04_measurement_model_only.py`
+
 ## Where to look
 - Expected measurement and Jacobians: `src/kiss_slam/models/measurement.py`
 - Landmark triangulation from first observation: same file (`initialize_landmark_from_measurement`).
 
 ## Run example
 ```bash
-python examples/tutorial_04_measurement_model.py
+python examples/04_measurement_model_only.py
 ```
 
 ## Try this

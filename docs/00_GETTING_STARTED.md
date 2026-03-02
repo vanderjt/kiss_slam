@@ -19,6 +19,9 @@ This page gets you from a clean machine to your first successful run.
 `kiss_slam` is a small 2D SLAM package built around one core idea: keep the pipeline understandable.
 You can run it without ROS, with only NumPy/SciPy/Matplotlib and pytest.
 
+## Relevant runnable example
+- `examples/00_sanity_check_imports.py`
+
 ## Where to look in code
 - Package metadata and dependencies: `pyproject.toml`
 - Main demo entrypoint: `examples/ekf_slam_demo.py`
@@ -48,7 +51,7 @@ python examples/ekf_slam_demo.py
 
 Run the beginner quick script:
 ```bash
-python examples/tutorial_00_minimal_slam.py
+python examples/00_sanity_check_imports.py
 ```
 
 ## Minimal code example

@@ -16,6 +16,9 @@
 Most EKF issues are not “bad math”; they are mismatch between assumed noise and real data.
 Start with conservative noise, then tighten.
 
+## Relevant runnable example
+- `examples/09_full_ekf_slam_live.py`
+
 ## Where to look
 - Noise defaults and Joseph toggle: `src/kiss_slam/types.py`
 - NIS collection and innovation vectors: `src/kiss_slam/ekf_slam.py`
@@ -23,7 +26,7 @@ Start with conservative noise, then tighten.
 
 ## Run example
 ```bash
-python examples/tutorial_08_tuning_debugging.py
+python examples/09_full_ekf_slam_live.py --no-viz
 ```
 
 ## Try this

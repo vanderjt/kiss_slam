@@ -15,13 +15,16 @@
 ## Plain-English first
 Good visualization cuts debugging time drastically. This viewer keeps artists alive for speed and updates data in-place.
 
+## Relevant runnable example
+- `examples/08_ekf_slam_small_world.py`
+
 ## Where to look
 - Viewer class: `src/kiss_slam/viz/live_viewer.py`
 - Demo key bindings (`g`, `c`, `i`, space): `examples/ekf_slam_demo.py`
 
 ## Run example
 ```bash
-python examples/tutorial_07_visualization.py
+python examples/08_ekf_slam_small_world.py
 ```
 
 ## Try this
