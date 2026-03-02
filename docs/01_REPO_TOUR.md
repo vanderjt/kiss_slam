@@ -15,6 +15,9 @@
 ## Plain-English overview
 Here is the mental model: simulator generates controls + observations, EKF consumes them, viewer draws everything.
 
+## Relevant runnable example
+- `examples/01_world_generation.py`
+
 ## Module responsibilities
 - `src/kiss_slam/ekf_slam.py`: owns joint state vector, covariance, predict/update loop.
 - `src/kiss_slam/models/motion.py`: unicycle motion equations + Jacobians.
@@ -30,7 +33,7 @@ Here is the mental model: simulator generates controls + observations, EKF consu
 
 ## Run this tour script
 ```bash
-python examples/tutorial_01_repo_tour.py
+python examples/01_world_generation.py
 ```
 
 ## Try this

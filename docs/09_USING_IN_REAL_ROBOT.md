@@ -15,6 +15,9 @@
 ## Plain-English first
 Integrating on a real robot means replacing simulator inputs with real odometry + landmark detections while keeping the same EKF API.
 
+## Relevant runnable example
+- `examples/09_full_ekf_slam_live.py`
+
 ## Where to look
 - Real-world guidance: `docs/USAGE_IN_ROBOT.md`
 - Input dataclasses: `src/kiss_slam/types.py`
@@ -29,7 +32,7 @@ pose, landmarks = slam.get_state()
 
 ## Run bridge-style example
 ```bash
-python examples/tutorial_09_robot_integration_stub.py
+python examples/09_full_ekf_slam_live.py --no-viz
 ```
 
 ## Try this

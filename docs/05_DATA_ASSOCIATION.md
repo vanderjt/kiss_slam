@@ -16,13 +16,16 @@
 Data association answers: “which landmark does this measurement belong to?”
 Baseline in this repo uses known landmark IDs. Extension supports nearest-neighbor with Mahalanobis gating.
 
+## Relevant runnable example
+- `examples/05_data_association_demo.py`
+
 ## Where to look
 - Association strategies: `src/kiss_slam/data_association.py`
 - EKF hook point (`_associate`): `src/kiss_slam/ekf_slam.py`
 
 ## Run example
 ```bash
-python examples/tutorial_05_data_association.py
+python examples/05_data_association_demo.py
 ```
 
 ## Try this

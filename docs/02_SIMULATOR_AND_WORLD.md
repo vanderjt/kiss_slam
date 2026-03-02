@@ -15,13 +15,16 @@
 ## Plain-English first
 Before tuning an EKF, you need reproducible data. The simulator gives that: ground truth pose, noisy odometry, and noisy range-bearing landmark measurements.
 
+## Relevant runnable example
+- `examples/02_simulator_controls.py`
+
 ## Where to look
 - Landmark placement: `src/kiss_slam/sim/world.py`
 - Sim configuration and step loop: `src/kiss_slam/sim/simulator.py`
 
 ## Run examples
 ```bash
-python examples/tutorial_02_simulator_world.py
+python examples/02_simulator_controls.py
 ```
 
 ## Key code snippet

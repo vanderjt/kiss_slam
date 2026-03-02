@@ -19,13 +19,16 @@ EKF-SLAM alternates two phases:
 
 The state vector grows when new landmarks are initialized.
 
+## Relevant runnable example
+- `examples/06_ekf_predict_only.py and examples/07_ekf_update_single_landmark.py`
+
 ## Where to look
 - State layout, predict/update internals: `src/kiss_slam/ekf_slam.py`
 - Config defaults: `src/kiss_slam/types.py` (`EKFSLAMConfig`)
 
 ## Run example
 ```bash
-python examples/tutorial_06_ekf_core.py
+python examples/06_ekf_predict_only.py
 ```
 
 ## Try this
