@@ -1,7 +1,7 @@
 # kiss_slam
 
 `kiss_slam` is a small, readable Python package for 2D landmark EKF-SLAM.
-It is designed for fast integration into non-ROS robotics projects (Python 3.10+).
+It is designed for non-ROS robotics projects (Python 3.10+), with simulator + visualization included.
 
 ## Install
 
@@ -9,7 +9,7 @@ It is designed for fast integration into non-ROS robotics projects (Python 3.10+
 pip install -e .
 ```
 
-Development install (tests, lint tooling):
+Development install:
 
 ```bash
 pip install -e .[dev]
@@ -17,13 +17,26 @@ pip install -e .[dev]
 
 ## Quickstart
 
+Run the full visual demo:
+
+```bash
+python examples/ekf_slam_demo.py
+```
+
+Run the beginner step-0 script:
+
+```bash
+python examples/tutorial_00_minimal_slam.py
+```
+
+Minimal API usage:
+
 ```python
 import numpy as np
-
 from kiss_slam import EKFSLAM, EKFSLAMConfig
 from kiss_slam.models.motion import DifferentialDriveMotionModel
 from kiss_slam.models.measurement import RangeBearingMeasurementModel
-from kiss_slam.types import ControlInput, Measurement
+from kiss_slam.types import ControlInput
 
 slam = EKFSLAM(
     motion_model=DifferentialDriveMotionModel(),
@@ -33,106 +46,89 @@ slam = EKFSLAM(
         measurement_noise=np.diag([0.20**2, np.deg2rad(3.0) ** 2]),
     ),
 )
-
-u = ControlInput(v=1.0, w=0.1)
-slam.predict(u=u, dt=0.1)
-slam.update(
-    measurements=[
-        Measurement(landmark_id=1, range_m=4.2, bearing_rad=0.3),
-        Measurement(landmark_id=2, range_m=6.5, bearing_rad=-0.2),
-    ]
-)
-
-pose_est, landmarks_est = slam.get_state()
-print(pose_est, len(landmarks_est))
+slam.predict(u=ControlInput(v=1.0, w=0.1), dt=0.1)
+print(slam.robot_pose())
 ```
 
-Run the end-to-end simulator demo:
+## Beginner docs sequence
+
+1. [docs/00_GETTING_STARTED.md](docs/00_GETTING_STARTED.md)
+2. [docs/01_REPO_TOUR.md](docs/01_REPO_TOUR.md)
+3. [docs/02_SIMULATOR_AND_WORLD.md](docs/02_SIMULATOR_AND_WORLD.md)
+4. [docs/03_MOTION_MODEL.md](docs/03_MOTION_MODEL.md)
+5. [docs/04_MEASUREMENT_MODEL.md](docs/04_MEASUREMENT_MODEL.md)
+6. [docs/05_DATA_ASSOCIATION.md](docs/05_DATA_ASSOCIATION.md)
+7. [docs/06_EKF_SLAM_CORE.md](docs/06_EKF_SLAM_CORE.md)
+8. [docs/07_VISUALIZATION.md](docs/07_VISUALIZATION.md)
+9. [docs/08_TUNING_AND_DEBUGGING.md](docs/08_TUNING_AND_DEBUGGING.md)
+10. [docs/09_USING_IN_REAL_ROBOT.md](docs/09_USING_IN_REAL_ROBOT.md)
+
+## Tutorial examples
 
 ```bash
-python examples/ekf_slam_demo.py
+python examples/tutorial_01_repo_tour.py
+python examples/tutorial_02_simulator_world.py
+python examples/tutorial_03_motion_model.py
+python examples/tutorial_04_measurement_model.py
+python examples/tutorial_05_data_association.py
+python examples/tutorial_06_ekf_core.py
+python examples/tutorial_07_visualization.py
+python examples/tutorial_08_tuning_debugging.py
+python examples/tutorial_09_robot_integration_stub.py
 ```
 
+## Notebook
+
+Launch Jupyter and open the walkthrough notebook:
+
+```bash
+jupyter notebook examples/ekf_slam_walkthrough.ipynb
+```
+
+If `jupyter` is missing, install it in your conda environment:
+
+```bash
+conda install jupyter -y
+```
 
 ## Testing
-
-Run the full test suite from the repository root:
 
 ```bash
 python -m pytest
 ```
 
-## Linting and formatting guidance
-
-Linting and formatting are intentionally lightweight but recommended before opening a PR:
-
-```bash
-ruff check src tests examples
-black src tests examples
-```
-
-These tools are guidance-only in this repository today (not CI-enforced), but keeping code clean and consistently formatted helps preserve the KISS design goal.
-
-## API overview
-
-Core classes for integration:
-
-- `EKFSLAM`: estimator with `predict(...)`, `update(...)`, `step(...)`.
-- `EKFSLAMConfig`: process/measurement noise, initial covariance, gating/Joseph options.
-- `ControlInput(v, w)`: odometry input (m/s, rad/s).
-- `Measurement(landmark_id, range_m, bearing_rad)`: range-bearing observation.
-- `DifferentialDriveMotionModel`: unicycle-style motion model.
-- `RangeBearingMeasurementModel`: expected measurement + Jacobians + landmark init.
-- `KnownCorrespondenceAssociator`: baseline known-ID data association.
-- `NearestNeighborAssociator`: gated Mahalanobis nearest-neighbor association.
-
-Typical call sequence:
-
-1. `predict(u, dt, control_cov=...)`
-2. `update(measurements, measurement_cov=...)`
-3. read estimate with `get_state()` / `get_covariance()`.
-
-## Tuning tips (Q/R and gating)
-
-- Start conservative: larger `Q` and `R` reduce overconfidence and divergence.
-- `Q` (`process_noise`) should reflect real odometry drift, wheel slip, and timing jitter.
-- `R` (`measurement_noise`) should reflect range and bearing noise after outlier filtering.
-- If innovations are large but consistent, increase `Q` first (odometry often dominates).
-- If map updates are jittery, increase `R`.
-- For nearest-neighbor data association, tune `gate_threshold`:
-  - Lower gate: safer but more missed associations/new landmarks.
-  - Higher gate: fewer misses but more false matches.
-- Keep angle units in radians everywhere (`bearing_rad`, yaw, `w`).
-
 ## Troubleshooting
 
-### Filter divergence (state/covariance blow-up)
+### Matplotlib backend issues
+- Symptom: no interactive window appears.
+- Try:
+  ```bash
+  MPLBACKEND=TkAgg python examples/ekf_slam_demo.py
+  ```
+- On some Linux installs you may need:
+  ```bash
+  conda install tk -y
+  ```
 
-- Increase `Q` and/or `R`; under-modeled noise is the most common cause.
-- Verify `dt` and control units match the motion model assumptions.
-- Ensure outlier measurements are removed before calling `update(...)`.
-- Keep Joseph form enabled (`use_joseph_form=True`) for numerical stability.
+### Conda environment confusion
+- Ensure the active interpreter matches your env:
+  ```bash
+  which python
+  python --version
+  pip -V
+  ```
+- Reinstall package in active env:
+  ```bash
+  pip install -e .
+  ```
 
-### Angle wrap issues
+### Import errors
+- Run commands from repo root (`kiss_slam/`).
+- Confirm editable install completed without errors.
 
-Symptoms: sudden heading jumps near ±π, inconsistent bearing innovations.
+## Additional docs
 
-- Normalize all angles to `[-pi, pi]` before passing to SLAM.
-- Do not subtract raw angles directly without wrapping.
-- Ensure sensor code outputs bearing relative to robot heading.
-
-### Poor landmark association
-
-Symptoms: duplicated landmarks, map corruption, unstable corrections.
-
-- With known IDs, ensure IDs are stable over time and unique.
-- With nearest-neighbor, tighten `gate_threshold` and improve `R` realism.
-- Drop low-quality observations (grazing angles, too far, partial occlusion).
-- Prefer initializing landmarks only from geometrically reliable views.
-
-## More docs
-
-- Robot integration guide: `docs/USAGE_IN_ROBOT.md`
-- Tuning guide: `docs/CONFIG_TUNING.md`
-- Extension guide: `docs/EXTENDING.md`
-- Architecture notes: `docs/ARCHITECTURE.md`
+- `docs/USAGE_IN_ROBOT.md`
+- `docs/CONFIG_TUNING.md`
+- `docs/EXTENDING.md`
+- `docs/ARCHITECTURE.md`
