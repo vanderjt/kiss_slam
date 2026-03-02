@@ -1,28 +1,46 @@
 # Notebooks
 
-## Zero-to-Hero Notebook
+This folder contains teaching notebooks for EKF-SLAM theory and practice.
 
-Path: `notebooks/ntbk-zero-to-hero-kiss-slam.ipynb`
-
-This notebook is a practical EKF-SLAM walkthrough using the real `kiss_slam` classes:
-`World2D`, `Simulator`, motion/measurement models, `EKFSLAM`, data association, and `LiveViewer`.
-
-## Run with Conda + Jupyter
+## Run Notebooks (Conda + Jupyter)
 
 ```bash
 conda create -n kiss_slam python=3.10 -y
 conda activate kiss_slam
 pip install -e .
-conda install -y jupyter matplotlib numpy scipy
+conda install -y jupyter numpy matplotlib scipy
 jupyter notebook
 ```
 
-Then open:
+Then open any notebook under `notebooks/`.
 
-- `notebooks/ntbk-zero-to-hero-kiss-slam.ipynb`
+---
 
-## Notes
+## Theory Notebook Authoring Workflow
 
-- Execute the notebook **top-to-bottom** in a fresh kernel.
-- The notebook sets random seeds for reproducibility.
-- Total runtime is designed to stay under ~2 minutes on common laptops.
+Use these files together when creating new theory notebooks:
+
+- `notebooks/_TEMPLATE_THEORY_NOTEBOOK.md`
+  - canonical structure and section order,
+  - writing checklist for consistency.
+- `notebooks/_notebook_utils.py`
+  - tiny reusable helpers (seed, angle wrap, shape checks, matrix printing,
+    covariance ellipse plotting).
+
+### How to use the template
+
+1. Copy section structure from `_TEMPLATE_THEORY_NOTEBOOK.md`.
+2. Create notebook with naming style: `ntbk-XX-topic-name.ipynb`.
+3. Start with a reproducible setup cell (fixed seed).
+4. Keep examples deterministic, lightweight, and runnable top-to-bottom.
+5. Include exercises and a short recap.
+
+---
+
+## Recommended Learning Order
+
+This sequence will be expanded as more notebooks are added:
+
+1. `ntbk-zero-to-hero-kiss-slam.ipynb` (current end-to-end overview)
+2. Upcoming theory notebooks in `ntbk-XX-...` order
+
