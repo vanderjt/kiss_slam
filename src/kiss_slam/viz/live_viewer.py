@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,12 +23,31 @@ class LiveViewer:
     frame updates lightweight in regular Anaconda environments.
     """
 
+    # User-toggles (updated live by the demo via keypresses)
     show_ground_truth: bool = True
     show_covariance: bool = True
     show_innovations: bool = True
+
+    # Visual tuning
     heading_length_m: float = 0.9
+
+    # Matplotlib handles
     fig: plt.Figure = field(init=False)
     ax: plt.Axes = field(init=False)
+
+    # ---- INTERNAL ARTISTS (required because slots=True) ----
+    _true_traj_line: Any = field(init=False, repr=False)
+    _est_traj_line: Any = field(init=False, repr=False)
+
+    _true_landmarks: Any = field(init=False, repr=False)
+    _est_landmarks: Any = field(init=False, repr=False)
+
+    _heading_line: Any = field(init=False, repr=False)
+
+    _robot_cov_ellipse: Ellipse = field(init=False, repr=False)
+    _landmark_cov_ellipses: dict[int, Ellipse] = field(init=False, default_factory=dict, repr=False)
+
+    _innovation_lines: LineCollection = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
@@ -36,22 +56,43 @@ class LiveViewer:
         self.ax.set_title("kiss_slam live view")
         self.ax.set_xlabel("x [m]")
         self.ax.set_ylabel("y [m]")
-        self.ax.axis("equal")
+        self.ax.set_aspect("equal", adjustable="box")
         self.ax.grid(True, alpha=0.3)
 
+        # Trajectories
         (self._true_traj_line,) = self.ax.plot([], [], "k-", lw=1.6, label="true trajectory")
         (self._est_traj_line,) = self.ax.plot([], [], "tab:blue", ls="--", lw=1.8, label="estimated trajectory")
 
+        # Landmarks
         self._true_landmarks = self.ax.scatter([], [], c="k", marker="x", label="true landmarks")
         self._est_landmarks = self.ax.scatter([], [], c="tab:blue", marker="o", label="estimated landmarks")
 
+        # Heading line
         (self._heading_line,) = self.ax.plot([], [], color="tab:orange", lw=2.0, label="heading")
 
-        self._robot_cov_ellipse = Ellipse((0.0, 0.0), width=0.0, height=0.0, angle=0.0, fill=False, edgecolor="tab:blue", lw=1.8)
+        # Robot covariance ellipse (2x2 position covariance)
+        self._robot_cov_ellipse = Ellipse(
+            (0.0, 0.0),
+            width=0.0,
+            height=0.0,
+            angle=0.0,
+            fill=False,
+            edgecolor="tab:blue",
+            lw=1.8,
+        )
         self.ax.add_patch(self._robot_cov_ellipse)
 
-        self._landmark_cov_ellipses: dict[int, Ellipse] = {}
-        self._innovation_lines = LineCollection([], colors="tab:red", linewidths=1.2, alpha=0.8, label="innovations")
+        # Landmark covariance ellipses are created lazily as landmarks appear.
+        # NOTE: do NOT reassign self._landmark_cov_ellipses here; it is a dataclass field.
+
+        # Innovation vectors as a line collection
+        self._innovation_lines = LineCollection(
+            [],
+            colors="tab:red",
+            linewidths=1.2,
+            alpha=0.8,
+            label="innovations",
+        )
         self.ax.add_collection(self._innovation_lines)
 
         self.ax.legend(loc="upper right")
@@ -67,20 +108,50 @@ class LiveViewer:
         landmark_covariances: dict[int, np.ndarray],
         innovation_vectors: list[tuple[np.ndarray, np.ndarray]] | None = None,
     ) -> None:
-        """Update existing artists with newest state estimate and measurements."""
+        """Update existing artists with newest state estimate and measurements.
+
+        Parameters
+        ----------
+        true_traj:
+            (N, 3) or (N, 2) array of ground-truth poses/positions.
+        est_traj:
+            (N, 3) or (N, 2) array of estimated poses/positions.
+        current_pose:
+            (3,) array [x, y, theta].
+        true_landmarks:
+            (M, 2) array of ground-truth landmark positions.
+        est_landmarks:
+            Dict of landmark_id -> (2,) estimated landmark position.
+        state_cov:
+            Full EKF covariance matrix. The top-left 2x2 block is used for robot xy covariance.
+        landmark_covariances:
+            Dict of landmark_id -> (2,2) covariance for that landmark.
+        innovation_vectors:
+            Optional list of (start_xy, end_xy) segments to draw as innovations.
+        """
         innovation_vectors = [] if innovation_vectors is None else innovation_vectors
 
-        self._true_traj_line.set_data(true_traj[:, 0], true_traj[:, 1]) if true_traj.size else self._true_traj_line.set_data([], [])
+        # True trajectory
+        if true_traj.size:
+            self._true_traj_line.set_data(true_traj[:, 0], true_traj[:, 1])
+        else:
+            self._true_traj_line.set_data([], [])
         self._true_traj_line.set_visible(self.show_ground_truth)
 
-        self._est_traj_line.set_data(est_traj[:, 0], est_traj[:, 1]) if est_traj.size else self._est_traj_line.set_data([], [])
+        # Estimated trajectory
+        if est_traj.size:
+            self._est_traj_line.set_data(est_traj[:, 0], est_traj[:, 1])
+        else:
+            self._est_traj_line.set_data([], [])
 
+        # True landmarks
         if self.show_ground_truth and true_landmarks.size:
             self._true_landmarks.set_offsets(true_landmarks)
         else:
             self._true_landmarks.set_offsets(np.empty((0, 2)))
         self._true_landmarks.set_visible(self.show_ground_truth)
 
+        # Estimated landmarks
         if est_landmarks:
             ids_sorted = sorted(est_landmarks)
             est_xy = np.array([est_landmarks[lid] for lid in ids_sorted], dtype=float)
@@ -89,24 +160,38 @@ class LiveViewer:
             ids_sorted = []
             self._est_landmarks.set_offsets(np.empty((0, 2)))
 
+        # Heading
         heading_end = self._heading_endpoint(current_pose)
         self._heading_line.set_data([current_pose[0], heading_end[0]], [current_pose[1], heading_end[1]])
 
+        # Robot covariance ellipse
         if self.show_covariance and state_cov.shape[0] >= 2:
             self._set_ellipse(self._robot_cov_ellipse, center_xy=current_pose[:2], cov_xy=state_cov[:2, :2])
             self._robot_cov_ellipse.set_visible(True)
         else:
             self._robot_cov_ellipse.set_visible(False)
 
+        # Landmark covariance ellipses (created lazily)
         active_landmark_ids: set[int] = set()
         for landmark_id in ids_sorted:
             cov = landmark_covariances.get(landmark_id)
             if cov is None:
                 continue
+
             active_landmark_ids.add(landmark_id)
+
             ellipse = self._landmark_cov_ellipses.get(landmark_id)
             if ellipse is None:
-                ellipse = Ellipse((0.0, 0.0), width=0.0, height=0.0, angle=0.0, fill=False, edgecolor="tab:cyan", lw=1.0, alpha=0.8)
+                ellipse = Ellipse(
+                    (0.0, 0.0),
+                    width=0.0,
+                    height=0.0,
+                    angle=0.0,
+                    fill=False,
+                    edgecolor="tab:cyan",
+                    lw=1.0,
+                    alpha=0.8,
+                )
                 self._landmark_cov_ellipses[landmark_id] = ellipse
                 self.ax.add_patch(ellipse)
 
@@ -116,10 +201,12 @@ class LiveViewer:
             else:
                 ellipse.set_visible(False)
 
+        # Hide ellipses for landmarks no longer present
         for landmark_id, ellipse in self._landmark_cov_ellipses.items():
             if landmark_id not in active_landmark_ids:
                 ellipse.set_visible(False)
 
+        # Innovations
         if self.show_innovations and innovation_vectors:
             segments = [[start_xy, end_xy] for start_xy, end_xy in innovation_vectors]
             self._innovation_lines.set_segments(segments)
@@ -128,7 +215,13 @@ class LiveViewer:
             self._innovation_lines.set_segments([])
             self._innovation_lines.set_visible(False)
 
-        self._autoscale_view(true_traj=true_traj, est_traj=est_traj, true_landmarks=true_landmarks, est_landmarks=est_landmarks)
+        # View management + render
+        self._autoscale_view(
+            true_traj=true_traj,
+            est_traj=est_traj,
+            true_landmarks=true_landmarks,
+            est_landmarks=est_landmarks,
+        )
         self.fig.canvas.draw_idle()
         plt.pause(0.001)
 
@@ -140,10 +233,11 @@ class LiveViewer:
         est_landmarks: dict[int, np.ndarray],
     ) -> None:
         points: list[np.ndarray] = []
+
         if true_traj.size and self.show_ground_truth:
-            points.append(true_traj)
+            points.append(true_traj[:, :2])
         if est_traj.size:
-            points.append(est_traj)
+            points.append(est_traj[:, :2])
         if true_landmarks.size and self.show_ground_truth:
             points.append(true_landmarks)
         if est_landmarks:
@@ -155,11 +249,13 @@ class LiveViewer:
         all_pts = np.vstack(points)
         x_min, y_min = np.min(all_pts, axis=0)
         x_max, y_max = np.max(all_pts, axis=0)
+
         pad = 1.5
         self.ax.set_xlim(x_min - pad, x_max + pad)
         self.ax.set_ylim(y_min - pad, y_max + pad)
 
     def _heading_endpoint(self, pose: np.ndarray) -> np.ndarray:
+        """Compute the endpoint of the heading line from pose [x, y, theta]."""
         return np.array(
             [
                 pose[0] + self.heading_length_m * np.cos(pose[2]),
@@ -170,8 +266,9 @@ class LiveViewer:
 
     @staticmethod
     def _set_ellipse(ellipse: Ellipse, center_xy: np.ndarray, cov_xy: np.ndarray) -> None:
+        """Update an Ellipse patch from a 2x2 covariance matrix."""
         center, width, height, angle = covariance_ellipse_params(center_xy, cov_xy, n_std=2.0)
-        ellipse.set_center((center[0], center[1]))
-        ellipse.width = width
-        ellipse.height = height
-        ellipse.angle = angle
+        ellipse.set_center((float(center[0]), float(center[1])))
+        ellipse.width = float(width)
+        ellipse.height = float(height)
+        ellipse.angle = float(angle)
