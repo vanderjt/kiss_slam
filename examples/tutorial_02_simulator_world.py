@@ -1,5 +1,10 @@
 """Step 02: inspect simulator outputs."""
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 from kiss_slam.sim.simulator import SimConfig, Simulator
 from kiss_slam.sim.world import World2D
 
