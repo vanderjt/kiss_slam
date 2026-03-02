@@ -1,5 +1,10 @@
 """Step 01: quick module smoke check for newcomers."""
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 from kiss_slam import EKFSLAM
 from kiss_slam.data_association import KnownCorrespondenceAssociator, NearestNeighborAssociator
 from kiss_slam.models.measurement import RangeBearingMeasurementModel

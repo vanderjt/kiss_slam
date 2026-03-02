@@ -1,5 +1,10 @@
 """Step 09: skeleton for integrating real robot logs."""
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import numpy as np
 
 from kiss_slam import EKFSLAM, EKFSLAMConfig

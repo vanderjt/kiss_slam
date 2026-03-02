@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import os
 from typing import Iterable
+
+import matplotlib
+
+if os.name != "nt" and not os.environ.get("DISPLAY"):
+    # Keep examples runnable in headless Linux CI while leaving normal desktop
+    # backends unchanged for local interactive usage.
+    matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np

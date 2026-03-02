@@ -2,6 +2,11 @@ r"""Run an end-to-end EKF-SLAM demo with simulation and live visualization."""
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 import matplotlib.pyplot as plt
 import numpy as np
 
