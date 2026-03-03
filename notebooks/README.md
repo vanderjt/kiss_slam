@@ -39,8 +39,15 @@ Use these files together when creating new theory notebooks:
 
 ## Recommended Learning Order
 
-This sequence will be expanded as more notebooks are added:
-
-1. `ntbk-zero-to-hero-kiss-slam.ipynb` (current end-to-end overview)
-2. Upcoming theory notebooks in `ntbk-XX-...` order
+1. `ntbk-01-gaussians-and-uncertainty.ipynb`
+2. `ntbk-02-multivariate-gaussians-covariance.ipynb`
+3. `ntbk-03-covariance-ellipses-and-geometry.ipynb`
+4. `ntbk-04-linearization-and-taylor-approx.ipynb`
+5. `ntbk-05-jacobians-for-robotics.ipynb`
+6. `ntbk-06-ekf-core-ideas-predict-update.ipynb`
+7. `ntbk-07-ekf-2d-tracking-example.ipynb`
+8. `ntbk-08-ekf-consistency-nis-nees.ipynb`
+9. `ntbk-09-differential-drive-kinematics.ipynb`
+10. `ntbk-10-motion-model-jacobians-and-process-noise.ipynb`
+11. `ntbk-zero-to-hero-kiss-slam.ipynb` (end-to-end project view)
 
