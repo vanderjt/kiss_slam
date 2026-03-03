@@ -53,3 +53,4 @@ Use these files together when creating new theory notebooks:
 12. `ntbk-12-measurement-jacobians-and-innovation.ipynb`
 13. `ntbk-13-data-association-and-gating.ipynb`
 14. `ntbk-zero-to-hero-kiss-slam.ipynb` (end-to-end project view)
+15. `ntbk-15-capstone-full-ekf-slam-pipeline.ipynb` (full pipeline + tuning/debug labs)
