@@ -49,5 +49,7 @@ Use these files together when creating new theory notebooks:
 8. `ntbk-08-ekf-consistency-nis-nees.ipynb`
 9. `ntbk-09-differential-drive-kinematics.ipynb`
 10. `ntbk-10-motion-model-jacobians-and-process-noise.ipynb`
-11. `ntbk-zero-to-hero-kiss-slam.ipynb` (end-to-end project view)
-
+11. `ntbk-11-range-bearing-measurements.ipynb`
+12. `ntbk-12-measurement-jacobians-and-innovation.ipynb`
+13. `ntbk-13-data-association-and-gating.ipynb`
+14. `ntbk-zero-to-hero-kiss-slam.ipynb` (end-to-end project view)
